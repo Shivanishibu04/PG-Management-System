@@ -53,6 +53,9 @@ if st.sidebar.button("🔓 Logout"):
     st.session_state.role = None
     st.session_state.username = None
 
+if "tenant_added" not in st.session_state:
+    st.session_state.tenant_added = False
+
 # ---------------- ADMIN DASHBOARD ----------------
 if role == "ADMIN":
     st.title("👑 Admin Dashboard")
@@ -97,23 +100,30 @@ if role == "ADMIN":
 
             available_rooms = df_rooms[
                 (df_rooms["floor"] == selected_floor)
-                & (df_rooms["capacity"] > df_rooms["current_occupancy"])
+                & (df_rooms["current_occupancy"] < df_rooms["capacity"])
             ]
+
+            # Keep only unique room numbers
+            available_rooms = available_rooms.drop_duplicates(subset=["room_no"])
 
             if not available_rooms.empty:
                 room_options = [
                     f"Room {row['room_no']} ({row['sharing_type'][0]})"
                     for _, row in available_rooms.iterrows()
                 ]
+
                 room_map = {
                     room_options[i]: available_rooms.iloc[i]
                     for i in range(len(room_options))
                 }
+
                 selected_room = st.selectbox("Select Room", room_options)
             else:
                 st.warning("No available rooms on this floor")
                 selected_room = None
 
+
+            # 👇 space added before Add Tenant button
             if st.button("Add Tenant"):
                 if not tenant_name or not contact or selected_room is None:
                     st.error("Please fill all fields and select a room")
@@ -150,6 +160,7 @@ if role == "ADMIN":
                     st.success(
                         f"Tenant {tenant_name} added successfully! Deposit: ₹{rent_per_person}"
                     )
+
 
 
     # ---------------- VIEW TENANTS ----------------
@@ -211,20 +222,42 @@ if role == "ADMIN":
     elif menu == "View Rent Payment Records":
         st.subheader("💰 Rent Payment Records")
 
+        # Fetch all tenants
         cur.execute("SELECT tenant_id, tenant_name FROM tenants")
         all_tenants = cur.fetchall()
         tenant_dict = {t[0]: t[1] for t in all_tenants}
 
+        # Get tenants who have PAID (any time)
         cur.execute("SELECT tenant_id FROM rent_payments WHERE status = 'PAID'")
         paid_tenants = [row[0] for row in cur.fetchall()]
 
+        # Tenants who have not paid
         unpaid_tenants = [(tid, tenant_dict[tid]) for tid in tenant_dict if tid not in paid_tenants]
 
         if unpaid_tenants:
             df_unpaid = pd.DataFrame(unpaid_tenants, columns=["Tenant ID", "Tenant Name"])
+            st.subheader("Tenants with Pending Rent")
             st.table(df_unpaid)
         else:
             st.success("All tenants have paid their rent.")
+
+        # ---------------- Tenants who paid rent this month ----------------
+        current_month = datetime.datetime.now().strftime("%Y-%m")
+        cur.execute(
+            "SELECT t.tenant_id, t.tenant_name FROM rent_payments rp "
+            "JOIN tenants t ON rp.tenant_id = t.tenant_id "
+            "WHERE rp.status='PAID' AND rp.month=?",
+            (current_month,)
+        )
+        paid_this_month = cur.fetchall()
+
+        if paid_this_month:
+            df_paid_month = pd.DataFrame(paid_this_month, columns=["Tenant ID", "Tenant Name"])
+            st.subheader(f"Tenants who paid rent for {current_month}")
+            st.table(df_paid_month)
+        else:
+            st.info(f"No tenants have paid rent for {current_month} yet.")
+
 
 # ---------------- TENANT DASHBOARD ----------------
 elif role == "TENANT":
