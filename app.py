@@ -65,7 +65,9 @@ if role == "ADMIN":
     # ---------------- ADD TENANT ----------------
     if menu == "Add Tenant":
         st.subheader("➕ Add Tenant")
+
         col1, col2, col3 = st.columns([1, 2, 1])
+
         with col2:
             tenant_name = st.text_input("Tenant Name")
             contact = st.text_input("Phone Number")
@@ -74,9 +76,18 @@ if role == "ADMIN":
                 "SELECT room_id, room_no, sharing_type, capacity, current_occupancy, rent_per_person FROM rooms"
             )
             room_data = cur.fetchall()
-            df_rooms = pd.DataFrame(room_data, columns=[
-                "room_id", "room_no", "sharing_type", "capacity", "current_occupancy", "rent_per_person"
-            ])
+
+            df_rooms = pd.DataFrame(
+                room_data,
+                columns=[
+                    "room_id",
+                    "room_no",
+                    "sharing_type",
+                    "capacity",
+                    "current_occupancy",
+                    "rent_per_person",
+                ],
+            )
 
             # Safe floor extraction
             df_rooms["floor"] = df_rooms["room_no"].astype(str).str[0]
@@ -85,8 +96,8 @@ if role == "ADMIN":
             selected_floor = st.selectbox("Select Floor", floors)
 
             available_rooms = df_rooms[
-                (df_rooms["floor"] == selected_floor) &
-                (df_rooms["capacity"] > df_rooms["current_occupancy"])
+                (df_rooms["floor"] == selected_floor)
+                & (df_rooms["capacity"] > df_rooms["current_occupancy"])
             ]
 
             if not available_rooms.empty:
@@ -94,7 +105,10 @@ if role == "ADMIN":
                     f"Room {row['room_no']} ({row['sharing_type'][0]})"
                     for _, row in available_rooms.iterrows()
                 ]
-                room_map = {room_options[i]: available_rooms.iloc[i] for i in range(len(room_options))}
+                room_map = {
+                    room_options[i]: available_rooms.iloc[i]
+                    for i in range(len(room_options))
+                }
                 selected_room = st.selectbox("Select Room", room_options)
             else:
                 st.warning("No available rooms on this floor")
@@ -105,22 +119,38 @@ if role == "ADMIN":
                     st.error("Please fill all fields and select a room")
                 else:
                     room_info = room_map[selected_room]
-                    room_id, rent_per_person = room_info["room_id"], room_info["rent_per_person"]
+
+                    room_id = int(room_info["room_id"])
+                    rent_per_person = int(room_info["rent_per_person"])
 
                     cur.execute(
-                        "INSERT INTO tenants (tenant_name, room_id, contact, deposit_amount, deposit_status) VALUES (?, ?, ?, ?, ?)",
-                        (tenant_name, room_id, contact, rent_per_person, "HELD")
+                        """
+                        INSERT INTO tenants
+                        (tenant_name, room_id, contact, deposit_amount, deposit_status)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (tenant_name, room_id, contact, rent_per_person, "HELD"),
                     )
+
                     cur.execute(
-                       "INSERT INTO users (username, password, role, status) VALUES (?, ?, 'TENANT', 'ACTIVE')",
-                       (tenant_name, contact)
+                        """
+                        INSERT INTO users (username, password, role, status)
+                        VALUES (?, ?, 'TENANT', 'ACTIVE')
+                        """,
+                        (tenant_name, contact),
                     )
+
                     cur.execute(
                         "UPDATE rooms SET current_occupancy = current_occupancy + 1 WHERE room_id = ?",
-                        (room_id,)
+                        (room_id,),
                     )
+
                     conn.commit()
-                    st.success(f"Tenant {tenant_name} added successfully! Deposit: ₹{rent_per_person}")
+
+                    st.success(
+                        f"Tenant {tenant_name} added successfully! Deposit: ₹{rent_per_person}"
+                    )
+
 
     # ---------------- VIEW TENANTS ----------------
     elif menu == "View Tenants":
