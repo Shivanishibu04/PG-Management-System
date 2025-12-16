@@ -95,6 +95,10 @@ if role == "ADMIN":
             # Safe floor extraction
             df_rooms["floor"] = df_rooms["room_no"].astype(str).str[0]
 
+            # Convert occupancy and capacity to int in case they are bytes
+            df_rooms["capacity"] = df_rooms["capacity"].apply(lambda x: int.from_bytes(x, "little") if isinstance(x, bytes) else int(x))
+            df_rooms["current_occupancy"] = df_rooms["current_occupancy"].apply(lambda x: int.from_bytes(x, "little") if isinstance(x, bytes) else int(x))
+
             floors = sorted(df_rooms["floor"].unique())
             selected_floor = st.selectbox("Select Floor", floors)
 
@@ -121,6 +125,7 @@ if role == "ADMIN":
             else:
                 st.warning("No available rooms on this floor")
                 selected_room = None
+
 
 
             # 👇 space added before Add Tenant button
